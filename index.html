@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PICO SFXP REIMAGINED</title>
+<link rel="stylesheet" href="src/style.css">
+</head>
+<body>
+
+<h1>&#9670; pico sfxp reimagined &#9670;</h1>
+
+<div class="machine">
+  <div class="panels">
+    <div class="panel amp">
+      <h2>AMP</h2>
+      <div id="amp-params"></div>
+    </div>
+    <div class="panel pitch">
+      <h2>PITCH</h2>
+      <div id="pitch-params"></div>
+    </div>
+    <div class="panel wave">
+      <h2>WAVE</h2>
+      <div id="wave-params"></div>
+    </div>
+  </div>
+
+  <canvas id="scope" width="920" height="80"></canvas>
+
+  <div class="controls">
+    <button id="btn-random">&#9733; Random</button>
+    <button id="btn-play">&#9654; Play</button>
+    <button id="btn-save">&#9660; Save OGG</button>
+  </div>
+
+  <div class="hint">space = play &nbsp;&#124;&nbsp; r = random</div>
+</div>
+
+<script src="src/synth.js"></script>
+<script src="src/main.js"></script>
+</body>
+</html>

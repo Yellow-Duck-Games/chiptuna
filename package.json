@@ -1,0 +1,9 @@
+{
+  "name": "pico-sfxp-reimagined",
+  "version": "0.1.0",
+  "description": "PICO-8 style random SFX generator with amp/pitch/wave envelopes and LFOs",
+  "private": true,
+  "scripts": {
+    "start": "npx -y serve ."
+  }
+}

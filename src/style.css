@@ -1,0 +1,170 @@
+:root {
+  --p8-black:   #000000;
+  --p8-dblue:   #1d2b53;
+  --p8-purple:  #7e2553;
+  --p8-dgreen:  #008751;
+  --p8-brown:   #ab5236;
+  --p8-dgray:   #5f574f;
+  --p8-lgray:   #c2c3c7;
+  --p8-white:   #fff1e8;
+  --p8-red:     #ff004d;
+  --p8-orange:  #ffa300;
+  --p8-yellow:  #ffec27;
+  --p8-green:   #00e436;
+  --p8-blue:    #29adff;
+  --p8-indigo:  #83769c;
+  --p8-pink:    #ff77a8;
+  --p8-peach:   #ffccaa;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--p8-black);
+  color: var(--p8-white);
+  font-family: "Courier New", monospace;
+  font-weight: bold;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100vh;
+  padding: 16px;
+  image-rendering: pixelated;
+}
+
+h1 {
+  font-size: 20px;
+  letter-spacing: 2px;
+  color: var(--p8-pink);
+  text-shadow: 2px 2px 0 var(--p8-purple);
+  margin-bottom: 12px;
+  text-transform: uppercase;
+}
+
+.machine {
+  background: var(--p8-dblue);
+  border: 4px solid var(--p8-lgray);
+  box-shadow: 0 0 0 4px var(--p8-black), 8px 8px 0 0 var(--p8-purple);
+  padding: 14px;
+  max-width: 980px;
+  width: 100%;
+}
+
+.panels {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.panel {
+  background: var(--p8-black);
+  border: 2px solid var(--p8-dgray);
+  padding: 10px;
+}
+
+.panel h2 {
+  font-size: 13px;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+  padding: 2px 6px;
+  display: inline-block;
+}
+.panel.amp   h2 { background: var(--p8-green);  color: var(--p8-black); }
+.panel.pitch h2 { background: var(--p8-blue);   color: var(--p8-black); }
+.panel.wave  h2 { background: var(--p8-orange); color: var(--p8-black); }
+
+.param {
+  display: grid;
+  grid-template-columns: 92px 1fr 58px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+
+.param label {
+  font-size: 10px;
+  color: var(--p8-lgray);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.param .val {
+  font-size: 10px;
+  color: var(--p8-yellow);
+  text-align: right;
+  white-space: nowrap;
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 14px;
+  background: var(--p8-dblue);
+  border: 2px solid var(--p8-dgray);
+  outline: none;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  background: var(--p8-white);
+  border: 2px solid var(--p8-black);
+  box-shadow: 0 0 0 1px var(--p8-white);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 0;
+  background: var(--p8-white);
+  border: 2px solid var(--p8-black);
+}
+.panel.amp   input[type="range"]::-webkit-slider-thumb { background: var(--p8-green); }
+.panel.pitch input[type="range"]::-webkit-slider-thumb { background: var(--p8-blue); }
+.panel.wave  input[type="range"]::-webkit-slider-thumb { background: var(--p8-orange); }
+.panel.amp   input[type="range"]::-moz-range-thumb { background: var(--p8-green); }
+.panel.pitch input[type="range"]::-moz-range-thumb { background: var(--p8-blue); }
+.panel.wave  input[type="range"]::-moz-range-thumb { background: var(--p8-orange); }
+
+.controls {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 14px;
+}
+
+button {
+  font-family: inherit;
+  font-weight: bold;
+  font-size: 16px;
+  letter-spacing: 2px;
+  padding: 12px 28px;
+  border: none;
+  cursor: pointer;
+  color: var(--p8-black);
+  box-shadow: 0 4px 0 0 var(--p8-black), 0 4px 0 2px currentColor;
+  text-transform: uppercase;
+}
+button:active { transform: translateY(3px); box-shadow: 0 1px 0 0 var(--p8-black); }
+
+#btn-random { background: var(--p8-yellow); }
+#btn-play   { background: var(--p8-green); }
+#btn-save   { background: var(--p8-blue); }
+
+canvas#scope {
+  display: block;
+  width: 100%;
+  height: 80px;
+  background: var(--p8-black);
+  border: 2px solid var(--p8-dgray);
+  margin-top: 12px;
+}
+
+.hint {
+  margin-top: 10px;
+  font-size: 10px;
+  color: var(--p8-indigo);
+  text-align: center;
+}
