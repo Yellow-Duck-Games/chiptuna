@@ -324,6 +324,32 @@ button:active { transform: translateY(3px); box-shadow: 0 1px 0 0 var(--p8-black
 #btn-play   { background: var(--p8-green); }
 #btn-save   { background: var(--p8-blue); }
 
+.outputrow {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.outputrow label {
+  font-size: 10px;
+  color: var(--p8-lgray);
+  text-transform: uppercase;
+}
+.outputrow select {
+  font-family: inherit;
+  font-weight: bold;
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--p8-yellow);
+  background: var(--p8-black);
+  border: 2px solid var(--p8-dgray);
+  padding: 6px 8px;
+  outline: none;
+  cursor: pointer;
+}
+.outputrow select:focus { border-color: var(--p8-lgray); }
+
 canvas#scope {
   display: block;
   width: 100%;

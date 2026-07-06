@@ -357,8 +357,25 @@ function getCtx() {
   return audioCtx;
 }
 
+// Channel count is a user choice (see the "ch" selector): "auto" keeps the
+// natural behavior — mono while dry, stereo once reverb widens the image —
+// "mono" downmixes a wide render, "stereo" always yields two channels.
+// It's an output setting, persisted on its own, not part of the seed.
+let channelMode = "auto";
+
+function renderChannels() {
+  let { left, right } = renderStereo(state, SFX_SAMPLE_RATE);
+  if (channelMode === "mono" && left !== right) {
+    const m = new Float32Array(left.length);
+    for (let i = 0; i < m.length; i++) m[i] = (left[i] + right[i]) * 0.5;
+    left = right = m;
+  }
+  const mono = left === right && channelMode !== "stereo";
+  return { left, right, channels: mono ? [left] : [left, right] };
+}
+
 function makeSource(ctx) {
-  const { left, right } = renderStereo(state, SFX_SAMPLE_RATE);
+  const { left, right } = renderChannels();
   const buf = ctx.createBuffer(2, left.length, SFX_SAMPLE_RATE);
   buf.getChannelData(0).set(left);
   buf.getChannelData(1).set(right);
@@ -511,9 +528,7 @@ async function saveOgg() {
   btn.disabled = true;
   btn.textContent = "encoding…";
   try {
-    // dry sounds return one shared buffer -> export mono; wet -> true stereo
-    const { left, right } = renderStereo(state, SFX_SAMPLE_RATE);
-    const channels = left === right ? [left] : [left, right];
+    const { left, channels } = renderChannels();
 
     // play it back so the export gives audible feedback, like it used to
     const ctx = getCtx();
@@ -729,6 +744,28 @@ const PRESETS = {
     p.waveStart = w; p.waveEnd = w;
     return p;
   },
+  // anything goes as long as it's noise-based — static, zaps, whooshes,
+  // rumbles; wide pitch range because pitched noise changes character a lot
+  noise() {
+    const p = presetBase(), base = rnd(10, 55);
+    p.ampAttack = chance(0.3) ? rnd(0, 0.15) : 0;
+    p.ampHold = rnd(0, 0.2); p.ampDecay = rnd(0.05, 0.8);
+    if (chance(0.35)) { p.ampLfoRate = rnd(3, 24); p.ampLfoDepth = rnd(0.3, 1); }
+    p.pitchStart = base; p.pitchHold = rnd(0, 0.15);
+    p.pitchEnd = chance(0.3) ? base : clampNote(base + rnd(-25, 25));
+    p.pitchDecay = rnd(0.05, 0.5);
+    if (chance(0.3)) { p.pitchLfoRate = rnd(2, 16); p.pitchLfoDepth = rnd(1, 6); }
+    p.waveStart = 6; p.waveEnd = 6;
+    if (chance(0.25)) {
+      // tonal attack that dissolves into noise
+      p.waveStart = pick([2, 3, 4, 7]); p.waveDecay = rnd(0.05, 0.2);
+    } else if (chance(0.2)) {
+      // noise that resolves into a tone
+      p.waveEnd = pick([0, 5, 7]); p.waveHold = rnd(0, 0.1); p.waveDecay = rnd(0.1, 0.4);
+    }
+    p.reverb = chance(0.3) ? rnd(0.1, 0.5) : 0;
+    return p;
+  },
   // very short clean blip (menu select)
   select() {
     const p = presetBase(), base = rnd(36, 50), w = pick([0, 3, 4]);
@@ -739,7 +776,7 @@ const PRESETS = {
     return p;
   },
 };
-const PRESET_ORDER = ["pickup", "shoot", "explosion", "powerup", "hit", "jump", "portal", "warning", "select"];
+const PRESET_ORDER = ["noise", "pickup", "shoot", "explosion", "powerup", "hit", "jump", "portal", "warning", "select"];
 
 function runPreset(name) {
   const params = PRESETS[name]();
@@ -830,6 +867,19 @@ document.getElementById("btn-play").addEventListener("click", play);
 document.getElementById("btn-random").addEventListener("click", randomize);
 document.getElementById("btn-mutate").addEventListener("click", mutate);
 document.getElementById("btn-save").addEventListener("click", saveOgg);
+
+const channelsSel = document.getElementById("channels");
+channelsSel.addEventListener("change", () => {
+  channelMode = channelsSel.value;
+  try { localStorage.setItem("chiptuna-channels", channelMode); } catch (e) {}
+});
+try {
+  const savedMode = localStorage.getItem("chiptuna-channels");
+  if (["auto", "mono", "stereo"].includes(savedMode)) {
+    channelMode = savedMode;
+    channelsSel.value = savedMode;
+  }
+} catch (e) { /* private mode — setting just won't persist */ }
 
 const seedInput = document.getElementById("seed");
 // apply the moment a full valid seed lands in the field (paste or typing)
