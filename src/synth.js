@@ -151,3 +151,77 @@ function renderSfx(s, sr) {
 
   return data;
 }
+
+// ---------------------------------------------------------------------------
+// Stereo reverb — Schroeder/Freeverb-style: parallel damped comb filters into
+// series allpass filters, run once per channel with the right channel's delays
+// nudged by a stereo offset so the two tails decorrelate (that's what widens
+// the image). `reverb` (0..1) sets both the wet mix and the room size, so one
+// knob goes from dry-mono to wide-and-spacious. Deterministic: it only depends
+// on the (seeded) dry signal, so a seed still reproduces the sound exactly.
+// ---------------------------------------------------------------------------
+
+// tunings in samples at 44.1kHz (scaled to the actual sample rate below)
+const COMB_TUNING = [1116, 1277, 1422, 1557];
+const ALLPASS_TUNING = [556, 341];
+const STEREO_SPREAD = 23;
+
+function reverbChannel(dry, n, sr, offset, roomSize, damp, wet) {
+  const scale = sr / 44100;
+  const out = new Float32Array(n);
+
+  const combs = COMB_TUNING.map((tune) => ({
+    buf: new Float32Array(Math.max(1, Math.round((tune + offset) * scale))),
+    idx: 0,
+    store: 0,
+  }));
+  const allpasses = ALLPASS_TUNING.map((tune) => ({
+    buf: new Float32Array(Math.max(1, Math.round((tune + offset) * scale))),
+    idx: 0,
+  }));
+
+  for (let i = 0; i < n; i++) {
+    const input = (i < dry.length ? dry[i] : 0) * 0.3; // feed gain keeps the tail tame
+    let acc = 0;
+    for (const c of combs) {
+      const y = c.buf[c.idx];
+      c.store = y * (1 - damp) + c.store * damp;
+      c.buf[c.idx] = input + c.store * roomSize;
+      if (++c.idx >= c.buf.length) c.idx = 0;
+      acc += y;
+    }
+    for (const a of allpasses) {
+      const bufout = a.buf[a.idx];
+      a.buf[a.idx] = acc + bufout * 0.5;
+      if (++a.idx >= a.buf.length) a.idx = 0;
+      acc = bufout - acc;
+    }
+    // soft clip so a big wet mix can't exceed the ±1 the audio buffer allows
+    out[i] = Math.tanh((i < dry.length ? dry[i] : 0) + acc * wet);
+  }
+  return out;
+}
+
+function renderStereo(s, sr) {
+  const dry = renderSfx(s, sr);
+  const amt = s.reverb === undefined ? 0 : s.reverb;
+  if (amt <= 0.0001) return { left: dry, right: dry }; // dry -> identical channels = mono
+
+  const tail = Math.floor(sr * (0.15 + amt * 0.6)); // room for the tail to ring out
+  const n = dry.length + tail;
+  const roomSize = 0.7 + amt * 0.28; // 0.70..0.98
+  const damp = 0.25;
+  const wet = amt * 0.9;
+
+  const left = reverbChannel(dry, n, sr, 0, roomSize, damp, wet);
+  const right = reverbChannel(dry, n, sr, STEREO_SPREAD, roomSize, damp, wet);
+
+  // gentle fade on the tail end to avoid a click when the buffer stops
+  const fade = Math.min(256, n);
+  for (let i = 0; i < fade; i++) {
+    const g = i / fade;
+    left[n - 1 - i] *= g;
+    right[n - 1 - i] *= g;
+  }
+  return { left, right };
+}

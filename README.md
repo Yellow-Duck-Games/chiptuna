@@ -1,6 +1,6 @@
 # chiptuna
 
-A PICO-8 flavored random SFX generator. Pure vanilla JS + Web Audio, no dependencies, no build step.
+A PICO-8 flavored random SFX generator. Vanilla JS + Web Audio, no build step. The only third-party code is a vendored WebAssembly encoder for the Ogg export (see [src/vendor/](src/vendor/)).
 
 ## Run
 
@@ -14,15 +14,17 @@ npm start   # serves the folder via `npx serve`
 
 - **Random** (`r`) — roll a new sound, biased toward classic game-sfx shapes
 - **Mutate** (`m`) — nudge every parameter a little: same character, new variation
+- **Lock** (🔓/🔒 next to each slider) — click to lock a value; Random and Mutate then leave locked parameters exactly as they are and only vary the rest
 - **Play** (`space`) — play the current parameters
-- **Save OGG** — export the sound (ogg/opus in Firefox; Chrome doesn't support the ogg container, so it saves webm/opus)
+- **Save OGG** — export the sound as a real Ogg Vorbis file in every browser (encoded from the rendered samples via a vendored WebAssembly encoder). Mono when reverb is 0, stereo when it isn't.
 - **History** — every sound you play is listed (newest first, up to 20, deduped, kept across reloads); click an entry to bring that sound back, **×** deletes one entry, **clear** wipes the list
 
 ## Parameters
 
 Three sections, each with its own envelope (hold at start value, then slide to end value over decay) and LFO:
 
-- **AMP** — master volume, attack / hold / decay volume envelope + tremolo LFO. Total sound length = attack + hold + decay.
+- **AMP** — master volume, attack / hold / decay volume envelope + tremolo LFO, and a **reverb** send. Total sound length = attack + hold + decay.
+  - **reverb** — a stereo Schroeder/Freeverb-style reverb. At 0% the sound is dry and mono; turning it up adds a decaying tail and (because the left/right tails are offset) widens the stereo image, so one knob takes you from dry-mono to wide-and-spacious. It's rendered by hand like the rest of the synth, so it stays part of the seed and reproduces exactly.
 - **PITCH** — start/end in PICO-8 note units (0–63, C0 ≈ 65.4 Hz) + vibrato LFO in semitones.
 - **WAVE** — morphs across the 8 PICO-8 waveforms (TRI, TILT, SAW, SQR, PULSE, ORGAN, NOISE, PHASER), crossfading between adjacent shapes for fractional values.
 
@@ -31,7 +33,7 @@ Three sections, each with its own envelope (hold at start value, then slide to e
 The **seed** field below the scope holds the entire sound as a compact shareable string, e.g.
 
 ```
-chiptuna:Af__BR8ZmiVOAAAAAGGGYYYMzRhxAAAAAAAAAAAZmhhxAAAAAAAAAAEk
+chiptuna:AoAABR8ZmiVOAAAAAGGGYYYMzRhxAAAAAAAAAAAZmhhxAAAAAAAAAAAAAcU
 ```
 
 It updates live as you tweak sliders or roll a sound; pasting a seed into the field loads and plays that exact sound immediately. The base64url payload is a version byte, each parameter quantized to 16 bits, a 32-bit noise seed, and a checksum — so truncated or mistyped seeds are rejected instead of loading garbage, and since noise comes from a seeded PRNG a seed reproduces the sound sample-for-sample.

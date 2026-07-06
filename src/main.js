@@ -5,7 +5,7 @@
 // ---------------------------------------------------------------------------
 const PARAMS = [
   // group, key,            label,            min, max, step, default, format
-  ["amp",   "volume",       "volume",         0, 1,    0.01,  1.00, v => (v * 100).toFixed(0) + "%"],
+  ["amp",   "volume",       "volume",         0, 1,    0.01,  0.50, v => (v * 100).toFixed(0) + "%"],
   ["amp",   "ampAttack",    "attack",         0, 0.5,  0.001, 0.01, v => (v * 1000).toFixed(0) + "ms"],
   ["amp",   "ampHold",      "hold",           0, 1,    0.001, 0.10, v => (v * 1000).toFixed(0) + "ms"],
   ["amp",   "ampDecay",     "decay",          0.01, 2, 0.001, 0.30, v => (v * 1000).toFixed(0) + "ms"],
@@ -25,10 +25,15 @@ const PARAMS = [
   ["wave",  "waveDecay",    "decay",          0.01, 2, 0.001, 0.20, v => (v * 1000).toFixed(0) + "ms"],
   ["wave",  "waveLfoRate",  "lfo rate",       0, 32,   0.1,   0,    v => v.toFixed(1) + "hz"],
   ["wave",  "waveLfoDepth", "lfo depth",      0, 3.5,  0.05,  0,    v => v.toFixed(2)],
+
+  // spatial: stereo reverb send. Kept last so older seeds (which lack it) stay
+  // a valid prefix of the current layout and still decode.
+  ["amp",   "reverb",       "reverb",         0, 1,    0.01,  0,    v => (v * 100).toFixed(0) + "%"],
 ];
 
 const state = { noiseSeed: 1 };
 const sliders = {};
+const locked = {}; // key -> true when the value should survive Random
 
 // ---------------------------------------------------------------------------
 // UI
@@ -54,6 +59,20 @@ function buildUI() {
     val.className = "val";
     val.textContent = fmt(def);
 
+    // lock toggle — locked values are left untouched by Random
+    const lock = document.createElement("button");
+    lock.type = "button";
+    lock.className = "lock";
+    lock.textContent = "🔓";
+    lock.title = "lock this value when randomizing";
+    lock.setAttribute("aria-pressed", "false");
+    lock.addEventListener("click", () => {
+      locked[key] = !locked[key];
+      lock.textContent = locked[key] ? "🔒" : "🔓";
+      lock.classList.toggle("on", locked[key]);
+      lock.setAttribute("aria-pressed", String(!!locked[key]));
+    });
+
     slider.addEventListener("input", () => {
       state[key] = parseFloat(slider.value);
       val.textContent = fmt(state[key]);
@@ -62,6 +81,7 @@ function buildUI() {
 
     sliders[key] = { slider, val, fmt, min, max };
 
+    row.appendChild(lock);
     row.appendChild(lab);
     row.appendChild(slider);
     row.appendChild(val);
@@ -84,7 +104,7 @@ function setParam(key, value) {
 // checksum byte — base64url-encoded so truncated or mistyped seeds are
 // rejected instead of loading garbage.
 // ---------------------------------------------------------------------------
-const SEED_VERSION = 1;
+const SEED_VERSION = 2; // v1 had no reverb param; v2 seeds are one param longer
 const SEED_PREFIX = "chiptuna:";
 const SEED_BYTE_LEN = 1 + PARAMS.length * 2 + 4 + 1;
 
@@ -138,14 +158,28 @@ function encodeSeed() {
 
 function decodeNativeSeed(text) {
   const bytes = b64ToBytes(text.slice(text.indexOf(":") + 1));
-  if (!bytes || bytes.length !== SEED_BYTE_LEN) return false;
-  if (bytes[0] !== SEED_VERSION) return false;
+  if (!bytes || bytes.length < 8) return false;
   if (bytes[bytes.length - 1] !== seedChecksum(bytes.slice(0, -1))) return false;
-  PARAMS.forEach(([, key, , min, max], i) => {
-    const q = (bytes[1 + i * 2] << 8) | bytes[2 + i * 2];
-    setParam(key, min + (q / 0xffff) * (max - min));
+  return applySeedBytes(bytes);
+}
+
+// Shared by the native and hex decoders. The number of encoded params is
+// derived from the length (payload = version + 2*nParams + 4 noise + checksum),
+// so older seeds with fewer params still load — any param they omit keeps its
+// current default (e.g. reverb on a pre-v2 seed).
+function applySeedBytes(bytes) {
+  if (bytes[0] < 1 || bytes[0] > SEED_VERSION) return false;
+  const nParams = (bytes.length - 6) / 2;
+  if (!Number.isInteger(nParams) || nParams < 1 || nParams > PARAMS.length) return false;
+  PARAMS.forEach(([, key, , min, max, , def], i) => {
+    if (i < nParams) {
+      const q = (bytes[1 + i * 2] << 8) | bytes[2 + i * 2];
+      setParam(key, min + (q / 0xffff) * (max - min));
+    } else {
+      setParam(key, def);
+    }
   });
-  const o = 1 + PARAMS.length * 2;
+  const o = 1 + nParams * 2;
   state.noiseSeed =
     ((bytes[o] << 24) | (bytes[o + 1] << 16) | (bytes[o + 2] << 8) | bytes[o + 3]) >>> 0;
   return true;
@@ -162,17 +196,24 @@ function decodeSeed(text) {
   return decodeLegacySeed(h) || decodePico8Sfx(h);
 }
 
-// pre-rename seeds: the same payload as chirp8: but hex in an [sfx] wrapper
-const LEGACY_SEED_HEX_LEN = 2 + PARAMS.length * 4 + 8;
-
+// pre-rename seeds: the same payload as chiptuna: but hex in an [sfx] wrapper,
+// and no checksum byte. Layout: version(2 hex) + 4 hex/param + noise(8 hex).
+// Param count is derived from the length so seeds from any earlier version
+// still load, with any newer param defaulting.
 function decodeLegacySeed(h) {
-  if (h.length !== LEGACY_SEED_HEX_LEN) return false;
-  if (parseInt(h.slice(0, 2), 16) !== SEED_VERSION) return false;
-  PARAMS.forEach(([, key, , min, max], i) => {
-    const q = parseInt(h.slice(2 + i * 4, 6 + i * 4), 16);
-    setParam(key, min + (q / 0xffff) * (max - min));
+  const nParams = (h.length - 10) / 4;
+  if (!Number.isInteger(nParams) || nParams < 1 || nParams > PARAMS.length) return false;
+  const ver = parseInt(h.slice(0, 2), 16);
+  if (ver < 1 || ver > SEED_VERSION) return false;
+  PARAMS.forEach(([, key, , min, max, , def], i) => {
+    if (i < nParams) {
+      const q = parseInt(h.slice(2 + i * 4, 6 + i * 4), 16);
+      setParam(key, min + (q / 0xffff) * (max - min));
+    } else {
+      setParam(key, def);
+    }
   });
-  state.noiseSeed = parseInt(h.slice(2 + PARAMS.length * 4), 16) >>> 0;
+  state.noiseSeed = parseInt(h.slice(2 + nParams * 4), 16) >>> 0;
   return true;
 }
 
@@ -317,12 +358,13 @@ function getCtx() {
 }
 
 function makeSource(ctx) {
-  const data = renderSfx(state, SFX_SAMPLE_RATE);
-  const buf = ctx.createBuffer(1, data.length, SFX_SAMPLE_RATE);
-  buf.getChannelData(0).set(data);
+  const { left, right } = renderStereo(state, SFX_SAMPLE_RATE);
+  const buf = ctx.createBuffer(2, left.length, SFX_SAMPLE_RATE);
+  buf.getChannelData(0).set(left);
+  buf.getChannelData(1).set(right);
   const src = ctx.createBufferSource();
   src.buffer = buf;
-  return { src, data };
+  return { src, data: left }; // scope draws the left channel
 }
 
 function play() {
@@ -382,14 +424,7 @@ function renderHistory() {
     const restore = document.createElement("button");
     restore.className = "history-restore";
     restore.textContent = "#" + h.id + " " + h.label;
-    restore.addEventListener("click", () => {
-      if (decodeSeed(h.seed)) {
-        historyIndex = i;
-        updateSeedField();
-        renderHistory();
-        play();
-      }
-    });
+    restore.addEventListener("click", () => selectHistoryEntry(i, true));
 
     const del = document.createElement("button");
     del.className = "history-delete";
@@ -403,12 +438,27 @@ function renderHistory() {
   });
 }
 
+// Load a history entry into the sliders as the current sound and highlight it.
+// `andPlay` matches the click behavior; delete uses it without replaying.
+function selectHistoryEntry(i, andPlay) {
+  const h = history[i];
+  if (!h || !decodeSeed(h.seed)) return;
+  historyIndex = i;
+  updateSeedField();
+  renderHistory();
+  if (andPlay) play();
+}
+
 function deleteHistory(i) {
   history.splice(i, 1);
-  if (historyIndex === i) historyIndex = -1;      // current sound keeps playing, just unlisted
-  else if (historyIndex > i) historyIndex--;
   saveHistory();
-  renderHistory();
+  if (history.length === 0) {
+    historyIndex = -1;
+    renderHistory();
+  } else {
+    // selection moves to the first (newest) entry still in the list
+    selectHistoryEntry(0, false);
+  }
 }
 
 function saveHistory() {
@@ -436,55 +486,65 @@ function clearHistory() {
 }
 
 // ---------------------------------------------------------------------------
-// Save OGG — records the buffer through MediaRecorder. Firefox produces real
-// ogg/opus; Chrome doesn't support the ogg container, so it falls back to
-// webm/opus (same codec) and the file is named accordingly.
+// Save OGG — encodes the rendered samples to a real Ogg Vorbis file offline
+// (no MediaRecorder, so it's the same in every browser). The encoder is the
+// vendored wasm-media-encoders, loaded once lazily on the first export. Vorbis
+// is used because it accepts the synth's native 22050 Hz rate directly (Opus
+// only allows 8/12/16/24/48 kHz).
 // ---------------------------------------------------------------------------
-function pickRecorderMime() {
-  const candidates = [
-    "audio/ogg;codecs=opus",
-    "audio/ogg",
-    "audio/webm;codecs=opus",
-    "audio/webm",
-    "audio/mp4",
-  ];
-  for (const m of candidates) {
-    if (window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m;
+let oggEncoderPromise = null;
+function getOggEncoder() {
+  if (!oggEncoderPromise) {
+    oggEncoderPromise = (async () => {
+      if (!window.WasmMediaEncoder) throw new Error("encoder library not loaded");
+      if (!window.OGG_WASM_B64) throw new Error("embedded wasm not loaded");
+      // decode the embedded base64 to bytes — no fetch, so it works from file://
+      const bin = atob(window.OGG_WASM_B64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return WasmMediaEncoder.createEncoder("audio/ogg", bytes);
+    })();
   }
-  return null;
+  return oggEncoderPromise;
 }
 
-function saveOgg() {
-  const mime = pickRecorderMime();
-  if (!mime) {
-    alert("This browser has no MediaRecorder support - cannot encode audio.");
-    return;
-  }
-  const ctx = getCtx();
-  const { src, data } = makeSource(ctx);
-  const dest = ctx.createMediaStreamDestination();
-  src.connect(dest);
-  src.connect(ctx.destination); // hear it while it records
+async function saveOgg() {
+  const btn = document.getElementById("btn-save");
+  const original = btn.innerHTML;
+  btn.disabled = true;
+  btn.textContent = "encoding…";
+  try {
+    // dry sounds return one shared buffer -> export mono; wet -> true stereo
+    const { left, right } = renderStereo(state, SFX_SAMPLE_RATE);
+    const channels = left === right ? [left] : [left, right];
 
-  const rec = new MediaRecorder(dest.stream, { mimeType: mime });
-  const chunks = [];
-  rec.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
-  rec.onstop = () => {
-    const ext = mime.startsWith("audio/ogg") ? "ogg"
-              : mime.startsWith("audio/webm") ? "webm"
-              : "m4a";
-    const blob = new Blob(chunks, { type: mime });
+    // play it back so the export gives audible feedback, like it used to
+    const ctx = getCtx();
+    const buf = ctx.createBuffer(channels.length, left.length, SFX_SAMPLE_RATE);
+    channels.forEach((c, i) => buf.getChannelData(i).set(c));
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(ctx.destination);
+    src.start();
+    drawScope(left);
+
+    const enc = await getOggEncoder();
+    enc.configure({ sampleRate: SFX_SAMPLE_RATE, channels: channels.length, vbrQuality: 5 });
+    // encode() returns a view into wasm memory that gets reused, so copy it
+    const parts = [enc.encode(channels).slice(), enc.finalize().slice()];
+
+    const blob = new Blob(parts, { type: "audio/ogg" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = "sfx-" + Date.now() + "." + ext;
+    a.download = "sfx-" + Date.now() + ".ogg";
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-  };
-
-  rec.start();
-  src.onended = () => setTimeout(() => rec.stop(), 100); // tail so the end isn't clipped
-  src.start();
-  drawScope(data);
+  } catch (e) {
+    alert("Couldn't encode OGG: " + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = original;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -513,46 +573,56 @@ function drawScope(data) {
 function rnd(min, max) { return min + Math.random() * (max - min); }
 function chance(p) { return Math.random() < p; }
 
+// like setParam, but leaves locked values untouched so Random keeps them
+function randSet(key, value) {
+  if (!locked[key]) setParam(key, value);
+}
+
 function randomize() {
   // amp
-  setParam("ampAttack", chance(0.7) ? rnd(0, 0.02) : rnd(0, 0.3));
-  setParam("ampHold",   rnd(0, 0.3));
-  setParam("ampDecay",  rnd(0.05, 0.8));
+  randSet("ampAttack", chance(0.7) ? rnd(0, 0.02) : rnd(0, 0.3));
+  randSet("ampHold",   rnd(0, 0.3));
+  randSet("ampDecay",  rnd(0.05, 0.8));
   if (chance(0.3)) {
-    setParam("ampLfoRate",  rnd(2, 24));
-    setParam("ampLfoDepth", rnd(0.2, 1));
+    randSet("ampLfoRate",  rnd(2, 24));
+    randSet("ampLfoDepth", rnd(0.2, 1));
   } else {
-    setParam("ampLfoRate",  0);
-    setParam("ampLfoDepth", 0);
+    randSet("ampLfoRate",  0);
+    randSet("ampLfoDepth", 0);
   }
 
-  // pitch
-  const start = rnd(8, 55);
-  setParam("pitchStart", start);
-  setParam("pitchEnd",   chance(0.25) ? start : Math.min(63, Math.max(0, start + rnd(-30, 30))));
-  setParam("pitchHold",  rnd(0, 0.25));
-  setParam("pitchDecay", rnd(0.03, 0.7));
+  // pitch — a locked start still anchors the relative end
+  const start = locked.pitchStart ? state.pitchStart : rnd(8, 55);
+  randSet("pitchStart", start);
+  randSet("pitchEnd",   chance(0.25) ? start : Math.min(63, Math.max(0, start + rnd(-30, 30))));
+  randSet("pitchHold",  rnd(0, 0.25));
+  randSet("pitchDecay", rnd(0.03, 0.7));
   if (chance(0.35)) {
-    setParam("pitchLfoRate",  rnd(2, 20));
-    setParam("pitchLfoDepth", rnd(0.3, 6));
+    randSet("pitchLfoRate",  rnd(2, 20));
+    randSet("pitchLfoDepth", rnd(0.3, 6));
   } else {
-    setParam("pitchLfoRate",  0);
-    setParam("pitchLfoDepth", 0);
+    randSet("pitchLfoRate",  0);
+    randSet("pitchLfoDepth", 0);
   }
 
   // wave
-  const wStart = chance(0.15) ? rnd(0, 7) : Math.floor(rnd(0, 8)); // usually a clean shape
-  setParam("waveStart", wStart);
-  setParam("waveEnd",   chance(0.6) ? wStart : Math.floor(rnd(0, 8)));
-  setParam("waveHold",  rnd(0, 0.3));
-  setParam("waveDecay", rnd(0.05, 0.6));
+  const wStart = locked.waveStart
+    ? state.waveStart
+    : (chance(0.15) ? rnd(0, 7) : Math.floor(rnd(0, 8))); // usually a clean shape
+  randSet("waveStart", wStart);
+  randSet("waveEnd",   chance(0.6) ? wStart : Math.floor(rnd(0, 8)));
+  randSet("waveHold",  rnd(0, 0.3));
+  randSet("waveDecay", rnd(0.05, 0.6));
   if (chance(0.2)) {
-    setParam("waveLfoRate",  rnd(1, 16));
-    setParam("waveLfoDepth", rnd(0.2, 2));
+    randSet("waveLfoRate",  rnd(1, 16));
+    randSet("waveLfoDepth", rnd(0.2, 2));
   } else {
-    setParam("waveLfoRate",  0);
-    setParam("waveLfoDepth", 0);
+    randSet("waveLfoRate",  0);
+    randSet("waveLfoDepth", 0);
   }
+
+  // some rolls get a splash of stereo reverb
+  randSet("reverb", chance(0.35) ? rnd(0.15, 0.7) : 0);
 
   // fresh noise character each roll; volume stays where the user set it
   state.noiseSeed = (Math.random() * 0x100000000) >>> 0;
@@ -564,7 +634,7 @@ function randomize() {
 // nudge every parameter a little — keeps the sound's character but varies it
 function mutate() {
   for (const [, key, , min, max] of PARAMS) {
-    if (key === "volume") continue;
+    if (key === "volume" || locked[key]) continue;
     setParam(key, state[key] + (Math.random() * 2 - 1) * (max - min) * 0.08);
   }
   if (chance(0.3)) state.noiseSeed = (Math.random() * 0x100000000) >>> 0;
