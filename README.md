@@ -14,7 +14,8 @@ npm start   # serves the folder via `npx serve`
 
 - **Random** (`r`) — roll a new sound, biased toward classic game-sfx shapes
 - **Mutate** (`m`) — nudge every parameter a little: same character, new variation
-- **Lock** (🔓/🔒 next to each slider) — click to lock a value; Random and Mutate then leave locked parameters exactly as they are and only vary the rest
+- **Lock** (🔓/🔒 next to each slider) — click to lock a value; Random, Mutate, and the presets then leave locked parameters exactly as they are and only vary the rest
+- **Presets** — pickup / shoot / explosion / powerup / hit / jump / select. Each rolls a fresh random sound biased toward that category's character, so repeated clicks give variation on a theme
 - **Play** (`space`) — play the current parameters
 - **Save OGG** — export the sound as a real Ogg Vorbis file in every browser (encoded from the rendered samples via a vendored WebAssembly encoder). Mono when reverb is 0, stereo when it isn't.
 - **History** — every sound you play is listed (newest first, up to 20, deduped, kept across reloads); click an entry to bring that sound back, **×** deletes one entry, **clear** wipes the list

@@ -269,8 +269,37 @@ input[type="range"]::-moz-range-thumb {
   padding: 4px 6px;
 }
 
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+}
+.presets-label {
+  font-size: 10px;
+  color: var(--p8-lgray);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+#presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.preset {
+  font-size: 10px;
+  letter-spacing: 1px;
+  padding: 6px 10px;
+  background: var(--p8-indigo);
+  color: var(--p8-white);
+  box-shadow: 0 2px 0 0 var(--p8-black), 0 2px 0 2px currentColor;
+}
+.preset:active { transform: translateY(2px); box-shadow: 0 1px 0 0 var(--p8-black); }
+
 .controls {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   gap: 16px;
   margin-top: 14px;
@@ -309,4 +338,18 @@ canvas#scope {
   font-size: 10px;
   color: var(--p8-indigo);
   text-align: center;
+}
+
+/* narrow / portrait phones: let the big control buttons shrink and wrap so
+   they never run off-screen */
+@media (max-width: 480px) {
+  body { padding: 8px; }
+  h1 { font-size: 16px; }
+  .controls { gap: 8px; }
+  #btn-random, #btn-mutate, #btn-play, #btn-save {
+    font-size: 13px;
+    letter-spacing: 1px;
+    padding: 10px 14px;
+    flex: 1 1 40%; /* two per row, evenly filling the width */
+  }
 }

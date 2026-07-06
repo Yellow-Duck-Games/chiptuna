@@ -631,6 +631,114 @@ function randomize() {
   play();
 }
 
+// ---------------------------------------------------------------------------
+// Presets — each rolls a fresh random sound within a category's character.
+// They set every sound param (so nothing stale bleeds in) via randSet, so
+// locked values are still honored, then get a fresh noise seed and play.
+// ---------------------------------------------------------------------------
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function clampNote(n) { return Math.min(63, Math.max(0, n)); }
+
+// neutral starting point that every preset overrides as needed
+function presetBase() {
+  return {
+    ampAttack: 0, ampHold: 0, ampDecay: 0.3, ampLfoRate: 0, ampLfoDepth: 0,
+    pitchStart: 30, pitchEnd: 30, pitchHold: 0.03, pitchDecay: 0.2, pitchLfoRate: 0, pitchLfoDepth: 0,
+    waveStart: 3, waveEnd: 3, waveHold: 0, waveDecay: 0.2, waveLfoRate: 0, waveLfoDepth: 0,
+    reverb: 0,
+  };
+}
+
+const PRESETS = {
+  // bright short up-blip (coin/pickup)
+  pickup() {
+    const p = presetBase(), base = rnd(33, 46), w = pick([0, 3, 4]);
+    p.ampHold = rnd(0, 0.05); p.ampDecay = rnd(0.12, 0.3);
+    p.pitchStart = base; p.pitchHold = rnd(0.02, 0.07);
+    p.pitchEnd = clampNote(base + rnd(6, 14)); p.pitchDecay = rnd(0.02, 0.08);
+    p.waveStart = w; p.waveEnd = w;
+    p.reverb = chance(0.3) ? rnd(0.1, 0.3) : 0;
+    return p;
+  },
+  // high pitch sliding down fast (laser/shoot)
+  shoot() {
+    const p = presetBase(), base = rnd(44, 58), w = pick([2, 3, 6]);
+    p.ampHold = rnd(0, 0.03); p.ampDecay = rnd(0.1, 0.3);
+    p.pitchStart = base; p.pitchHold = rnd(0, 0.03);
+    p.pitchEnd = clampNote(base - rnd(18, 40)); p.pitchDecay = rnd(0.05, 0.18);
+    p.waveStart = w; p.waveEnd = chance(0.4) ? 6 : w;
+    return p;
+  },
+  // noise burst, low, long decay, boomy (explosion)
+  explosion() {
+    const p = presetBase(), base = rnd(14, 30);
+    p.ampHold = rnd(0, 0.05); p.ampDecay = rnd(0.4, 1.1);
+    if (chance(0.5)) { p.ampLfoRate = rnd(8, 24); p.ampLfoDepth = rnd(0.2, 0.5); }
+    p.pitchStart = base; p.pitchHold = rnd(0, 0.05);
+    p.pitchEnd = clampNote(base - rnd(6, 18)); p.pitchDecay = rnd(0.2, 0.6);
+    p.waveStart = 6; p.waveEnd = 6;
+    p.reverb = rnd(0.2, 0.5);
+    return p;
+  },
+  // rising, warbly, cheerful (powerup)
+  powerup() {
+    const p = presetBase(), base = rnd(24, 36), w = pick([0, 3, 5]);
+    p.ampAttack = rnd(0, 0.02); p.ampHold = rnd(0, 0.1); p.ampDecay = rnd(0.3, 0.7);
+    p.pitchStart = base; p.pitchHold = rnd(0, 0.05);
+    p.pitchEnd = clampNote(base + rnd(10, 24)); p.pitchDecay = rnd(0.2, 0.6);
+    if (chance(0.6)) { p.pitchLfoRate = rnd(6, 16); p.pitchLfoDepth = rnd(0.5, 3); }
+    p.waveStart = w; p.waveEnd = w;
+    p.reverb = chance(0.4) ? rnd(0.1, 0.4) : 0;
+    return p;
+  },
+  // short, harsh, noisy, downward (hit/hurt)
+  hit() {
+    const p = presetBase(), base = rnd(20, 40), w = pick([2, 3, 6]);
+    p.ampDecay = rnd(0.08, 0.22);
+    p.pitchStart = base; p.pitchEnd = clampNote(base - rnd(8, 20)); p.pitchDecay = rnd(0.03, 0.1);
+    p.waveStart = w; p.waveEnd = chance(0.5) ? 6 : w;
+    return p;
+  },
+  // upward slide, medium (jump)
+  jump() {
+    const p = presetBase(), base = rnd(28, 40), w = pick([0, 3, 4]);
+    p.ampHold = rnd(0, 0.05); p.ampDecay = rnd(0.15, 0.35);
+    p.pitchStart = base; p.pitchHold = rnd(0, 0.04);
+    p.pitchEnd = clampNote(base + rnd(8, 20)); p.pitchDecay = rnd(0.08, 0.2);
+    p.waveStart = w; p.waveEnd = w;
+    return p;
+  },
+  // very short clean blip (menu select)
+  select() {
+    const p = presetBase(), base = rnd(36, 50), w = pick([0, 3, 4]);
+    p.ampHold = rnd(0, 0.02); p.ampDecay = rnd(0.04, 0.12);
+    p.pitchStart = base; p.pitchHold = rnd(0, 0.02);
+    p.pitchEnd = chance(0.5) ? base : clampNote(base + rnd(2, 8)); p.pitchDecay = rnd(0.02, 0.06);
+    p.waveStart = w; p.waveEnd = w;
+    return p;
+  },
+};
+const PRESET_ORDER = ["pickup", "shoot", "explosion", "powerup", "hit", "jump", "select"];
+
+function runPreset(name) {
+  const params = PRESETS[name]();
+  for (const k in params) randSet(k, params[k]);
+  state.noiseSeed = (Math.random() * 0x100000000) >>> 0;
+  updateSeedField();
+  play();
+}
+
+function buildPresets() {
+  const container = document.getElementById("presets");
+  for (const name of PRESET_ORDER) {
+    const b = document.createElement("button");
+    b.className = "preset";
+    b.textContent = name;
+    b.addEventListener("click", () => runPreset(name));
+    container.appendChild(b);
+  }
+}
+
 // nudge every parameter a little — keeps the sound's character but varies it
 function mutate() {
   for (const [, key, , min, max] of PARAMS) {
@@ -692,6 +800,7 @@ function drawTuna() {
 // ---------------------------------------------------------------------------
 drawTuna();
 buildUI();
+buildPresets();
 updateSeedField();
 loadHistory();
 renderHistory();
