@@ -439,7 +439,6 @@ function renderHistory() {
 }
 
 // Load a history entry into the sliders as the current sound and highlight it.
-// `andPlay` matches the click behavior; delete uses it without replaying.
 function selectHistoryEntry(i, andPlay) {
   const h = history[i];
   if (!h || !decodeSeed(h.seed)) return;
@@ -452,13 +451,11 @@ function selectHistoryEntry(i, andPlay) {
 function deleteHistory(i) {
   history.splice(i, 1);
   saveHistory();
-  if (history.length === 0) {
-    historyIndex = -1;
-    renderHistory();
-  } else {
-    // selection moves to the first (newest) entry still in the list
-    selectHistoryEntry(0, false);
-  }
+  // deleting never changes the current sound: the highlight follows its entry,
+  // and vanishes if that entry is the one deleted
+  if (i === historyIndex) historyIndex = -1;
+  else if (i < historyIndex) historyIndex--;
+  renderHistory();
 }
 
 function saveHistory() {
@@ -708,6 +705,30 @@ const PRESETS = {
     p.waveStart = w; p.waveEnd = w;
     return p;
   },
+  // swirly warble with a wide sweep and wash of reverb (teleport/portal)
+  portal() {
+    const p = presetBase(), base = rnd(22, 38), w = pick([3, 4, 5]);
+    p.ampAttack = rnd(0.02, 0.1); p.ampHold = rnd(0.05, 0.2); p.ampDecay = rnd(0.4, 0.9);
+    if (chance(0.4)) { p.ampLfoRate = rnd(4, 12); p.ampLfoDepth = rnd(0.2, 0.5); }
+    p.pitchStart = base; p.pitchHold = rnd(0, 0.1);
+    p.pitchEnd = clampNote(base + rnd(-16, 20)); p.pitchDecay = rnd(0.3, 0.8);
+    p.pitchLfoRate = rnd(4, 14); p.pitchLfoDepth = rnd(2, 6);
+    p.waveStart = w; p.waveEnd = chance(0.4) ? pick([3, 4, 5]) : w;
+    if (chance(0.5)) { p.waveHold = rnd(0, 0.2); p.waveDecay = rnd(0.2, 0.5); }
+    p.reverb = rnd(0.3, 0.7);
+    return p;
+  },
+  // pulsing alarm tone, harsh and insistent (warning/alert)
+  warning() {
+    const p = presetBase(), base = rnd(30, 44), w = pick([2, 3, 4]);
+    p.ampHold = rnd(0.2, 0.5); p.ampDecay = rnd(0.15, 0.4);
+    p.ampLfoRate = rnd(5, 12); p.ampLfoDepth = rnd(0.7, 1); // hard on/off beeping
+    p.pitchStart = base; p.pitchEnd = base;
+    p.pitchHold = rnd(0.1, 0.3); p.pitchDecay = rnd(0.1, 0.3);
+    if (chance(0.6)) { p.pitchLfoRate = rnd(2, 7); p.pitchLfoDepth = rnd(2, 5); } // two-tone siren wobble
+    p.waveStart = w; p.waveEnd = w;
+    return p;
+  },
   // very short clean blip (menu select)
   select() {
     const p = presetBase(), base = rnd(36, 50), w = pick([0, 3, 4]);
@@ -718,7 +739,7 @@ const PRESETS = {
     return p;
   },
 };
-const PRESET_ORDER = ["pickup", "shoot", "explosion", "powerup", "hit", "jump", "select"];
+const PRESET_ORDER = ["pickup", "shoot", "explosion", "powerup", "hit", "jump", "portal", "warning", "select"];
 
 function runPreset(name) {
   const params = PRESETS[name]();
