@@ -51,6 +51,17 @@ function holdDecayEnv(t, start, end, hold, decay) {
   return start + (end - start) * k;
 }
 
+// deterministic PRNG so the noise waveform is reproducible from a seed
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Render the whole sfx into a Float32Array, sample by sample
 // ---------------------------------------------------------------------------
@@ -61,6 +72,8 @@ function renderSfx(s, sr) {
 
   let phase = 0;
   const noise = { value: 0, prev: 0, next: 0, lastStep: -1, phaserPhase: 0 };
+  const rand = mulberry32(s.noiseSeed === undefined ? 1 : s.noiseSeed);
+  const volume = s.volume === undefined ? 1 : s.volume;
 
   // one-pole lowpass, mimics pico-8's soft top end (its output rolls off
   // well below the raw harmonics a naive square/saw would produce)
@@ -112,7 +125,7 @@ function renderSfx(s, sr) {
     if (step !== noise.lastStep) {
       noise.lastStep = step;
       noise.prev = noise.next;
-      noise.next = Math.random() * 2 - 1;
+      noise.next = rand() * 2 - 1;
     }
     noise.value = noise.prev + (noise.next - noise.prev) * (stepPos - step);
 
@@ -122,7 +135,7 @@ function renderSfx(s, sr) {
     }
 
     lp += lpAlpha * (sample - lp);
-    data[i] = lp * amp * 0.5;
+    data[i] = lp * amp * 0.5 * volume;
 
     phase += freq / sr;
     phase -= Math.floor(phase);

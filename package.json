@@ -1,7 +1,7 @@
 {
-  "name": "pico-sfxp-reimagined",
-  "version": "0.1.0",
-  "description": "PICO-8 style random SFX generator with amp/pitch/wave envelopes and LFOs",
+  "name": "chiptuna",
+  "version": "0.3.0",
+  "description": "CHIPTUNA - a PICO-8 flavored random SFX generator with amp/pitch/wave envelopes and LFOs",
   "private": true,
   "scripts": {
     "start": "npx -y serve ."
