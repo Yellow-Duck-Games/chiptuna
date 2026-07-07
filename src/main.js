@@ -899,7 +899,13 @@ document.getElementById("btn-copy-seed").addEventListener("click", () => {
   navigator.clipboard.writeText(seedInput.value);
 });
 document.addEventListener("keydown", (e) => {
-  if (e.target.tagName === "INPUT") return;
+  // Only text-entry fields (the seed box) should swallow shortcut keys.
+  // Range sliders and buttons keep focus after you tweak/click them, but
+  // Space must still play — so don't bail for those.
+  const t = e.target;
+  const typing = (t.tagName === "INPUT" && t.type === "text") ||
+                 t.tagName === "TEXTAREA" || t.isContentEditable;
+  if (typing) return;
   if (e.code === "Space") { e.preventDefault(); play(); }
   if (e.code === "KeyR")  { randomize(); }
   if (e.code === "KeyM")  { mutate(); }
