@@ -137,6 +137,22 @@ h1 {
   color: var(--p8-yellow);
   text-align: right;
   white-space: nowrap;
+  width: 100%;
+  box-sizing: border-box;
+  font-family: inherit;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 0;
+  padding: 2px 3px;
+  cursor: text;
+}
+.param .val:hover {
+  border-color: var(--p8-dgray);
+}
+.param .val:focus {
+  outline: none;
+  background: var(--p8-dblue);
+  border-color: var(--p8-yellow);
 }
 
 input[type="range"] {

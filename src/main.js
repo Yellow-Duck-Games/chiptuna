@@ -55,9 +55,14 @@ function buildUI() {
     slider.step = step;
     slider.value = def;
 
-    const val = document.createElement("span");
+    // editable value readout — type a number (in the units shown) to set it exactly
+    const val = document.createElement("input");
+    val.type = "text";
     val.className = "val";
-    val.textContent = fmt(def);
+    val.spellcheck = false;
+    val.setAttribute("autocomplete", "off");
+    val.title = "type a value (in the units shown) to set it exactly";
+    val.value = fmt(def);
 
     // lock toggle — locked values are left untouched by Random
     const lock = document.createElement("button");
@@ -75,9 +80,30 @@ function buildUI() {
 
     slider.addEventListener("input", () => {
       state[key] = parseFloat(slider.value);
-      val.textContent = fmt(state[key]);
+      val.value = fmt(state[key]);
       updateSeedField();
     });
+
+    // commit a typed value: pull the first number out of the field, convert it
+    // from the displayed unit back to the raw range, then clamp + sync the slider.
+    const commitVal = () => {
+      const m = val.value.match(/-?\d*\.?\d+/);
+      if (m) {
+        let num = parseFloat(m[0]);
+        const unit = fmt(0); // detect the formatter's display scaling
+        if (unit.includes("ms")) num /= 1000;
+        else if (unit.includes("%")) num /= 100;
+        setParam(key, num); // clamps to min/max and updates slider, state + readout
+        updateSeedField();
+      }
+      val.value = fmt(state[key]); // normalize the text (revert on bad input)
+    };
+    val.addEventListener("blur", commitVal);
+    val.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); val.blur(); }
+      else if (e.key === "Escape") { val.value = fmt(state[key]); val.blur(); }
+    });
+    val.addEventListener("focus", () => val.select());
 
     sliders[key] = { slider, val, fmt, min, max };
 
@@ -94,7 +120,7 @@ function setParam(key, value) {
   const v = Math.min(s.max, Math.max(s.min, value));
   state[key] = v;
   s.slider.value = v;
-  s.val.textContent = s.fmt(v);
+  s.val.value = s.fmt(v);
 }
 
 // ---------------------------------------------------------------------------
@@ -736,8 +762,8 @@ const PRESETS = {
   // pulsing alarm tone, harsh and insistent (warning/alert)
   warning() {
     const p = presetBase(), base = rnd(30, 44), w = pick([2, 3, 4]);
-    p.ampHold = rnd(0.2, 0.5); p.ampDecay = rnd(0.15, 0.4);
-    p.ampLfoRate = rnd(5, 12); p.ampLfoDepth = rnd(0.7, 1); // hard on/off beeping
+    p.ampHold = rnd(0.3, 0.6); p.ampDecay = rnd(0.4, 0.8); // sustain long enough for several beeps
+    p.ampLfoRate = rnd(2.5, 6); p.ampLfoDepth = rnd(0.9, 1); // slow, deep gate: beeps with silent pauses
     p.pitchStart = base; p.pitchEnd = base;
     p.pitchHold = rnd(0.1, 0.3); p.pitchDecay = rnd(0.1, 0.3);
     if (chance(0.6)) { p.pitchLfoRate = rnd(2, 7); p.pitchLfoDepth = rnd(2, 5); } // two-tone siren wobble

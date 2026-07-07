@@ -94,10 +94,17 @@ function renderSfx(s, sr) {
     }
     amp = Math.max(0, amp);
 
-    // amp lfo (tremolo, dips below full volume)
+    // amp lfo: a smooth tremolo at low depth, a hard on/off gate (with real
+    // silent pauses, like an alarm) at high depth. depth drives both how far
+    // it dips and how square the edges get, so a deep lfo reads as beeping
+    // rather than a continuous wave.
     if (s.ampLfoDepth > 0 && s.ampLfoRate > 0) {
-      const lfo = 0.5 + 0.5 * Math.sin(2 * Math.PI * s.ampLfoRate * t);
-      amp *= 1 - s.ampLfoDepth * lfo;
+      const phase = 0.5 + 0.5 * Math.sin(2 * Math.PI * s.ampLfoRate * t); // 0..1
+      const k = 1 + s.ampLfoDepth * 14; // edge steepness: soft when shallow, square when deep
+      const gate = 1 / (1 + Math.exp(-k * (phase - 0.5))); // logistic-shaped tremolo
+      // blend toward the hard gate as depth rises so shallow tremolos stay smooth
+      const shaped = (1 - s.ampLfoDepth) * phase + s.ampLfoDepth * gate;
+      amp *= 1 - s.ampLfoDepth * shaped;
     }
 
     // --- pitch envelope + vibrato ---
